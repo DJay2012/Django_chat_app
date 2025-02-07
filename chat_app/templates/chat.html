@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Chat</title>
+    <!-- Bootstrap CSS -->
+    <link
+      rel="stylesheet"
+      href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css"
+    />
+    <!-- Google Font -->
+    <link
+      href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      body {
+        background: #f5f6fa;
+        font-family: "Roboto", sans-serif;
+      }
+      .chat-container {
+        margin-top: 20px;
+        height: calc(100vh - 40px);
+      }
+      /* Sidebar / User List */
+      #user-list {
+        max-height: calc(100vh - 80px);
+        overflow-y: auto;
+        background: #ffffff;
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+      }
+      .user-item {
+        cursor: pointer;
+        padding: 10px 15px;
+        border-bottom: 1px solid #dee2e6;
+        transition: background-color 0.3s;
+      }
+      .user-item:hover,
+      .user-item.active {
+        background-color: #f1f1f1;
+      }
+      /* Chat Header */
+      .chat-header {
+        padding: 15px;
+        background-color: #ffffff;
+        border: 1px solid #dee2e6;
+        border-radius: 8px 8px 0 0;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+      }
+      /* Chat Messages Area */
+      #message-area {
+        height: calc(100vh - 200px);
+        overflow-y: auto;
+        background: #ffffff;
+        border: 1px solid #dee2e6;
+        border-top: none;
+        padding: 15px;
+        box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.05);
+        border-radius: 0 0 8px 8px;
+      }
+      /* Chat Bubble Styles */
+      .message {
+        margin-bottom: 10px;
+        padding: 12px 20px;
+        border-radius: 20px;
+        max-width: 75%;
+        word-wrap: break-word;
+        clear: both;
+        box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1);
+        transition: background-color 0.3s ease, transform 0.2s ease;
+      }
+      .message:hover {
+        transform: scale(1.02);
+      }
+      .message.received {
+        background-color: #50e3c2; /* Vibrant teal */
+        float: left;
+        color: #fff;
+      }
+      .message.sent {
+        background-color: #4a90e2; /* Vibrant blue */
+        float: right;
+        color: #fff;
+      }
+      .message .sender {
+        font-weight: 600;
+        margin-bottom: 5px;
+        display: block;
+      }
+      /* Input Area */
+      .input-area {
+        border: 1px solid #dee2e6;
+        border-top: none;
+        padding: 10px;
+        background-color: #ffffff;
+        border-radius: 0 0 8px 8px;
+      }
+      .input-area input {
+        border-radius: 20px;
+      }
+      /* Logout Button */
+      #logout-form {
+        position: absolute;
+        top: 20px;
+        right: 20px;
+      }
+      #logout-button {
+        border-radius: 20px;
+      }
+      /* Sidebar Card Header with Gradient */
+      .card-header {
+        background: linear-gradient(45deg, #4a90e2, #50e3c2);
+        color: #fff;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container-fluid chat-container">
+      <div class="row">
+        <!-- Sidebar: Users List -->
+        <div class="col-md-3">
+          <div class="card">
+            <div class="card-header">Users</div>
+            <div class="card-body p-0" id="user-list">
+              <ul class="list-unstyled mb-0">
+                {% for user in users %}
+                <li
+                  class="user-item {% if receiver and receiver.id == user.id %}active{% endif %}"
+                  data-user-id="{{ user.id }}"
+                >
+                  {{ user.username }}
+                </li>
+                {% endfor %}
+              </ul>
+            </div>
+          </div>
+        </div>
+        <!-- Main Chat Area -->
+        <div class="col-md-9 position-relative">
+          <!-- Logout Button -->
+          <form id="logout-form" action="{% url 'logout' %}" method="post">
+            {% csrf_token %}
+            <button type="submit" class="btn btn-danger" id="logout-button">
+              Logout
+            </button>
+          </form>
+          {% if receiver %}
+          <div class="chat-header border rounded-top">
+            <h5 class="mb-0">Chat with {{ receiver.username }}</h5>
+          </div>
+          {% else %}
+          <div class="chat-header border rounded-top">
+            <h5 class="mb-0">Select a user to start chatting</h5>
+          </div>
+          {% endif %}
+          <div id="message-area">
+            <div id="chat-log">
+              {% for message in messages %}
+              <div class="message {% if message.sender == request.user %}sent{% else %}received{% endif %}">
+                <span class="sender">
+                  {% if message.sender == request.user %}
+                  You
+                  {% else %}
+                  {{ message.sender.username }}
+                  {% endif %}:
+                </span>
+                {{ message.message }}
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+          {% if receiver %}
+          <div class="input-area">
+            <div class="input-group">
+              <input
+                type="text"
+                id="chat-message-input"
+                class="form-control"
+                placeholder="Type your message..."
+              />
+              <div class="input-group-append">
+                <button id="chat-message-submit" class="btn btn-primary">
+                  Send
+                </button>
+              </div>
+            </div>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+    <script>
+      const userId = "{{ request.user.id }}";
+      let receiverId = "{{ receiver.id }}";
+      const chatLog = document.getElementById("chat-log");
+      const messageInput = document.getElementById("chat-message-input");
+      const messageSubmitButton = document.getElementById("chat-message-submit");
+      const userItems = document.querySelectorAll(".user-item");
+      const messageArea = document.getElementById("message-area");
+
+      let chatSocket;
+
+      function connectWebSocket() {
+        chatSocket = new WebSocket(
+          "ws://" + window.location.host + "/ws/chat/"
+        );
+
+        chatSocket.onmessage = function (e) {
+          const data = JSON.parse(e.data);
+          if (data.type === "chat_message") {
+            const message = data.message;
+            const senderId = data.sender_id;
+            const senderUsername = data.sender_username;
+            chatLog.innerHTML += `<div class="message ${
+              senderId == userId ? "sent" : "received"
+            }"><span class="sender">${senderUsername}:</span> ${message}</div>`;
+            messageArea.scrollTop = messageArea.scrollHeight;
+          }
+        };
+
+        chatSocket.onopen = function () {
+          console.log("Connected to the chat server");
+        };
+
+        chatSocket.onclose = function (e) {
+          console.error(
+            "Chat socket closed unexpectedly. Reconnecting in 3 seconds..."
+          );
+          setTimeout(connectWebSocket, 3000);
+        };
+
+        messageSubmitButton.onclick = function (e) {
+          const message = messageInput.value;
+          if (message.trim() !== "" && receiverId) {
+            chatSocket.send(
+              JSON.stringify({
+                message: message,
+                receiver_id: receiverId,
+              })
+            );
+
+            chatLog.innerHTML += `<div class="message sent"><span class="sender">You:</span> ${message}</div>`;
+            messageArea.scrollTop = messageArea.scrollHeight;
+            messageInput.value = "";
+            messageInput.focus();
+          }
+        };
+
+        messageInput.addEventListener("keyup", function (event) {
+          if (event.keyCode === 13) {
+            event.preventDefault();
+            messageSubmitButton.click();
+          }
+        });
+      }
+
+      userItems.forEach((item) => {
+        item.addEventListener("click", () => {
+          receiverId = item.dataset.userId;
+          window.location.href = `/chat/${receiverId}/`;
+        });
+      });
+
+      if (receiverId) {
+        connectWebSocket();
+      }
+    </script>
+  </body>
+</html>
